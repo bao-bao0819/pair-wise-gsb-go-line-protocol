@@ -90,6 +90,13 @@ type Decoder struct {
 
 	// err holds any non-EOF error that was returned from rd.
 	err error
+
+	// valStart and valEnd hold the offsets into d.buf of the start and
+	// end of the raw (still-escaped) value most recently returned by
+	// NextFieldBytes. They're used by TransformFields to splice
+	// replacement values into the original entry without disturbing
+	// the surrounding bytes.
+	valStart, valEnd int
 }
 
 // NewDecoder returns a decoder that splits the line-protocol text
@@ -305,6 +312,7 @@ func (d *Decoder) NextFieldBytes() (key []byte, kind ValueKind, value []byte, er
 	if !d.ensure(1) {
 		return nil, Unknown, nil, d.syntaxErrorf(d.r1-d.r0, "expected value for field %q, found end of input", fieldKey)
 	}
+	d.valStart = d.r1
 	var fieldVal []byte
 	var fieldKind ValueKind
 	switch d.at(0) {
@@ -348,6 +356,7 @@ func (d *Decoder) NextFieldBytes() (key []byte, kind ValueKind, value []byte, er
 		fieldVal := d.take(fieldValChars)
 		return nil, Unknown, nil, d.syntaxErrorf(start, "value for field %q (%q) has unrecognized type", fieldKey, fieldVal)
 	}
+	d.valEnd = d.r1
 	if !d.ensure(1) {
 		d.section = endSection
 		return fieldKey, fieldKind, fieldVal, nil
